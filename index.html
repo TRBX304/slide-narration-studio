@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>スライド録音スタジオ</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.min.js"></script>
+<style>
+  :root{
+    --bg-app:#12141a;
+    --bg-panel:#1b1e27;
+    --bg-raised:#232733;
+    --bg-raised-2:#2a2f3d;
+    --border:#2e3340;
+    --text:#edeef2;
+    --text-muted:#8891a1;
+    --text-faint:#5b6272;
+    --accent:#e8a33d;
+    --accent-strong:#f2b658;
+    --accent-ink:#3a2a0f;
+    --record:#e5484d;
+    --record-strong:#ff6a6f;
+    --success:#4fb477;
+    --radius:10px;
+    --radius-sm:6px;
+    --sans:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic","Segoe UI",Roboto,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg-app);
+    color:var(--text);
+    font-family:var(--sans);
+    min-height:100vh;
+  }
+  button{font-family:inherit;}
+  input{font-family:inherit;}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+
+  /* ---------- header / tabs ---------- */
+  header{
+    position:sticky;top:0;z-index:20;
+    display:flex;align-items:center;gap:20px;flex-wrap:wrap;
+    padding:14px 24px;
+    background:rgba(27,30,39,0.92);
+    backdrop-filter:blur(6px);
+    border-bottom:1px solid var(--border);
+  }
+  .brand h1{font-size:17px;font-weight:600;margin:0;letter-spacing:0.01em;white-space:nowrap;}
+  .tabs{display:flex;gap:4px;background:var(--bg-raised);border:1px solid var(--border);border-radius:999px;padding:3px;margin-left:auto;}
+  .tab-btn{
+    border:none;background:transparent;color:var(--text-muted);padding:7px 16px;border-radius:999px;
+    font-size:13px;font-weight:500;cursor:pointer;transition:background .15s ease,color .15s ease;
+  }
+  .tab-btn.active{background:var(--accent);color:var(--accent-ink);font-weight:600;}
+  .tab-btn:hover:not(.active){color:var(--text);}
+
+  .banner{max-width:880px;margin:0 auto;padding:10px 24px 0;}
+  .banner-inner{
+    background:var(--bg-panel);border:1px solid var(--border);border-left:3px solid var(--accent);
+    border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;color:var(--text-muted);line-height:1.6;
+  }
+
+  .view{display:none;}
+  .view.active{display:block;}
+
+  .toolbar{
+    max-width:880px;margin:0 auto;padding:18px 20px 0;
+    display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  }
+  .toolbar .meta{font-family:var(--mono);font-size:12.5px;color:var(--text-muted);margin-right:auto;}
+  .toolbar-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+
+  main{max-width:880px;margin:0 auto;padding:16px 20px 120px;}
+
+  /* ---------- buttons ---------- */
+  .btn{
+    display:inline-flex;align-items:center;gap:7px;
+    padding:9px 16px;border-radius:999px;border:1px solid var(--border);
+    background:var(--bg-raised);color:var(--text);
+    font-size:13.5px;font-weight:500;cursor:pointer;
+    transition:background .15s ease, border-color .15s ease, transform .1s ease;
+    white-space:nowrap;
+  }
+  .btn:hover:not(:disabled){background:var(--bg-raised-2);}
+  .btn:active:not(:disabled){transform:scale(0.97);}
+  .btn:disabled{opacity:0.4;cursor:not-allowed;}
+  .btn-primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600;}
+  .btn-primary:hover:not(:disabled){background:var(--accent-strong);border-color:var(--accent-strong);}
+  .btn-record{background:transparent;border-color:var(--record);color:var(--record-strong);}
+  .btn-record:hover:not(:disabled){background:rgba(229,72,77,0.12);}
+  .btn-record.is-active{background:var(--record);color:#fff;}
+  .btn-ghost{background:transparent;border-color:transparent;color:var(--text-muted);padding:9px 10px;}
+  .btn-ghost:hover:not(:disabled){color:var(--text);background:var(--bg-raised);}
+  .btn-icon{padding:7px 9px;}
+  .btn-sm{padding:6px 12px;font-size:12.5px;}
+  .btn svg{width:15px;height:15px;flex-shrink:0;}
+
+  /* ---------- empty state ---------- */
+  .empty-state{
+    margin-top:44px;text-align:center;color:var(--text-muted);
+    display:flex;flex-direction:column;align-items:center;gap:16px;
+  }
+  .empty-state .icon{
+    width:56px;height:56px;border-radius:16px;background:var(--bg-panel);
+    border:1px solid var(--border);display:flex;align-items:center;justify-content:center;
+    color:var(--text-faint);
+  }
+  .empty-state p{margin:0;font-size:14.5px;line-height:1.7;max-width:340px;}
+
+  /* ---------- slide list ---------- */
+  #slideList, #clipList{display:flex;flex-direction:column;gap:14px;}
+  .slide-card, .clip-card{
+    display:flex;gap:16px;
+    background:var(--bg-panel);border:1px solid var(--border);border-radius:var(--radius);
+    padding:14px;
+  }
+  .slide-thumb, .clip-thumb{
+    position:relative;width:176px;flex-shrink:0;border-radius:var(--radius-sm);
+    overflow:hidden;background:#000;border:1px solid var(--border);
+    display:flex;align-items:center;justify-content:center;
+    aspect-ratio:16/9;
+  }
+  .slide-thumb img, .clip-thumb img{width:100%;display:block;}
+  .slide-num, .clip-num{
+    position:absolute;top:6px;left:6px;font-family:var(--mono);font-size:11px;
+    background:rgba(0,0,0,0.55);color:var(--text);padding:2px 7px;border-radius:5px;
+  }
+  .rec-badge, .clip-badge{
+    position:absolute;bottom:6px;right:6px;font-family:var(--mono);font-size:11px;
+    background:rgba(0,0,0,0.6);padding:2px 7px;border-radius:5px;color:var(--success);
+    display:flex;align-items:center;gap:5px;
+  }
+  .rec-badge.none{color:var(--text-faint);}
+  .dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0;}
+
+  .slide-body, .clip-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:12px;justify-content:center;}
+  .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .field-label{font-size:12.5px;color:var(--text-muted);}
+  .dur-input{
+    width:72px;background:var(--bg-raised);border:1px solid var(--border);color:var(--text);
+    border-radius:var(--radius-sm);padding:6px 8px;font-family:var(--mono);font-size:13px;
+  }
+  .status-text{font-family:var(--mono);font-size:12.5px;color:var(--text-muted);}
+  .status-text.recording{color:var(--record-strong);}
+  .status-text.done{color:var(--success);}
+
+  .level-meter{display:flex;align-items:flex-end;gap:2px;height:22px;flex:1;min-width:60px;max-width:220px;}
+  .level-meter i{flex:1;background:var(--record-strong);border-radius:2px;height:15%;transition:height .06s linear;display:block;}
+
+  audio.player{height:32px;max-width:230px;flex:1;}
+  audio.player::-webkit-media-controls-panel{background:var(--bg-raised);}
+
+  .clip-name{font-size:14px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .clip-reorder{display:flex;flex-direction:column;gap:4px;flex-shrink:0;align-self:center;}
+  .clip-reorder button{
+    width:28px;height:24px;border-radius:6px;border:1px solid var(--border);background:var(--bg-raised);
+    color:var(--text-muted);cursor:pointer;display:flex;align-items:center;justify-content:center;
+  }
+  .clip-reorder button:hover:not(:disabled){color:var(--text);background:var(--bg-raised-2);}
+  .clip-reorder button:disabled{opacity:0.3;cursor:not-allowed;}
+  .clip-reorder svg{width:13px;height:13px;}
+
+  .plus-slot{
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+    border:1.5px dashed var(--border);border-radius:var(--radius);padding:24px;color:var(--text-muted);
+    cursor:pointer;transition:border-color .15s ease,color .15s ease;
+  }
+  .plus-slot:hover{border-color:var(--accent);color:var(--text);}
+
+  /* ---------- overlay (preview / export) ---------- */
+  .overlay{
+    position:fixed;inset:0;background:rgba(8,9,12,0.92);z-index:100;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px;
+  }
+  .overlay canvas{max-width:min(92vw,1100px);max-height:64vh;width:100%;height:auto;background:#000;border-radius:8px;box-shadow:0 20px 60px rgba(0,0,0,0.5);}
+  .overlay-controls{display:flex;align-items:center;gap:10px;}
+  .overlay-progress{width:min(92vw,1100px);height:5px;background:var(--bg-raised);border-radius:99px;overflow:hidden;}
+  .overlay-progress > div{height:100%;background:var(--accent);width:0%;transition:width .1s linear;}
+  .overlay-time{font-family:var(--mono);font-size:12.5px;color:var(--text-muted);}
+  .overlay-title{font-size:13.5px;color:var(--text-muted);}
+
+  @media (max-width:560px){
+    .slide-card, .clip-card{flex-direction:column;}
+    .slide-thumb, .clip-thumb{width:100%;}
+    .clip-reorder{flex-direction:row;align-self:flex-start;}
+    header{padding:12px 16px;}
+    .toolbar, main{padding-left:14px;padding-right:14px;}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .btn, .level-meter i, .overlay-progress > div, .tab-btn{transition:none;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand"><h1>スライド録音スタジオ</h1></div>
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="slides">スライド動画を作る</button>
+    <button class="tab-btn" data-tab="concat">動画をつなげる</button>
+  </nav>
+</header>
+
+<div class="banner" id="compatBanner" style="display:none;">
+  <div class="banner-inner" id="compatBannerText"></div>
+</div>
+
+<!-- ============ VIEW 1: slide narration studio ============ -->
+<section class="view active" id="view-slides">
+  <div class="toolbar">
+    <span class="meta" id="headerMeta"></span>
+    <div class="toolbar-actions">
+      <input type="file" id="pdfInput" accept="application/pdf" hidden>
+      <button class="btn" id="openPdfBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M12 15l-4-4M12 15l4-4"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+        PDFを開く
+      </button>
+      <button class="btn" id="previewBtn" disabled>
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        プレビュー再生
+      </button>
+      <button class="btn btn-primary" id="exportBtn" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M12 15l-4-4M12 15l4-4" transform="rotate(180 12 9)"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+        動画を書き出す
+      </button>
+    </div>
+  </div>
+
+  <main>
+    <div class="empty-state" id="emptyState">
+      <div class="icon">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="13" rx="1.5"/><path d="M8 21h8M12 17v4"/></svg>
+      </div>
+      <p>PDFを開いてスライドを読み込むと、ここに1枚ずつ並びます。<br>各スライドに秒数を指定してナレーションを録音してください。</p>
+      <button class="btn btn-primary" id="emptyOpenBtn">PDFを開く</button>
+    </div>
+    <div id="slideList"></div>
+  </main>
+</section>
+
+<!-- ============ VIEW 2: video concatenation ============ -->
+<section class="view" id="view-concat">
+  <div class="toolbar">
+    <span class="meta" id="concatMeta"></span>
+    <div class="toolbar-actions">
+      <input type="file" id="clipInput" accept="video/*" multiple hidden>
+      <button class="btn" id="addClipsBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+        動画を追加
+      </button>
+      <button class="btn" id="concatPreviewBtn" disabled>
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        プレビュー再生
+      </button>
+      <button class="btn btn-primary" id="concatExportBtn" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M12 15l-4-4M12 15l4-4" transform="rotate(180 12 9)"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+        つなげて書き出す
+      </button>
+    </div>
+  </div>
+
+  <main>
+    <div class="empty-state" id="concatEmptyState">
+      <div class="icon">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 8l6 4-6 4V8z"/><path d="M14 8l6 4-6 4V8z"/></svg>
+      </div>
+      <p>つなげたい動画を追加してください。<br>順番はあとから入れ替えられます。冒頭・スライド動画・末尾など、好きな組み合わせで並べられます。</p>
+      <button class="btn btn-primary" id="concatEmptyAddBtn">動画を追加</button>
+    </div>
+    <div id="clipList"></div>
+  </main>
+</section>
+
+<script>
+(() => {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.worker.min.js";
+
+  // ============================================================
+  // shared helpers
+  // ============================================================
+  const shared = { audioCtx: null };
+
+  function getAudioCtx(){
+    if (!shared.audioCtx) shared.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    return shared.audioCtx;
+  }
+
+  function pickMime(candidates){
+    for (const c of candidates){
+      if (window.MediaRecorder && MediaRecorder.isTypeSupported(c)) return c;
+    }
+    return '';
+  }
+
+  function fmtTime(sec){
+    sec = Math.max(0, sec || 0);
+    const m = Math.floor(sec/60);
+    const s = (sec - m*60).toFixed(1).padStart(4,'0');
+    return `${m}:${s}`;
+  }
+
+  // draws `source` (canvas or video) into ctx2d, letterboxed to fit OUT_W x OUT_H
+  function drawContain(ctx2d, source, sw, sh, OUT_W, OUT_H){
+    ctx2d.fillStyle = '#000';
+    ctx2d.fillRect(0, 0, OUT_W, OUT_H);
+    if (!sw || !sh) return;
+    const scale = Math.min(OUT_W/sw, OUT_H/sh);
+    const w = sw*scale, h = sh*scale;
+    const x = (OUT_W-w)/2, y = (OUT_H-h)/2;
+    ctx2d.drawImage(source, x, y, w, h);
+  }
+
+  function createOverlay(title){
+    const overlay = document.createElement('div');
+    overlay.className = 'overlay';
+    overlay.innerHTML = `
+      <div class="overlay-title">${title}</div>
+      <canvas></canvas>
+      <div class="overlay-progress"><div></div></div>
+      <div class="overlay-time">0:00 / 0:00</div>
+      <div class="overlay-controls"><button class="btn" data-role="cancel">閉じる</button></div>
+    `;
+    document.body.appendChild(overlay);
+    return {
+      overlay,
+      canvas: overlay.querySelector('canvas'),
+      progressBar: overlay.querySelector('.overlay-progress > div'),
+      timeLabel: overlay.querySelector('.overlay-time'),
+      titleEl: overlay.querySelector('.overlay-title'),
+      controlsEl: overlay.querySelector('.overlay-controls'),
+      cancelBtn: overlay.querySelector('[data-role="cancel"]'),
+    };
+  }
+
+  function setupCompatBanner(){
+    const issues = [];
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) issues.push('マイク録音');
+    if (!window.MediaRecorder) issues.push('録音・動画書き出し');
+    if (!HTMLCanvasElement.prototype.captureStream) issues.push('動画書き出し');
+    if (issues.length){
+      const banner = document.getElementById('compatBanner');
+      banner.style.display = 'block';
+      document.getElementById('compatBannerText').textContent =
+        `お使いのブラウザでは ${issues.join('・')} に対応していない可能性があります。最新のChromeまたはEdgeでの利用をおすすめします。`;
+    }
+  }
+  setupCompatBanner();
+
+  // plays one video file onto a shared canvas, routing its audio to destNode (export)
+  // and/or the speakers (monitor). Resolves when the clip ends or is cancelled.
+  function playVideoSegment({url, ctx2d, OUT_W, OUT_H, audioCtx, destNode, baseElapsed, total, progressBar, timeLabel, cancelHolder}){
+    return new Promise((resolve) => {
+      const video = document.createElement('video');
+      video.src = url;
+      video.style.cssText = 'position:fixed;left:-9999px;top:0;width:2px;height:2px;opacity:0;';
+      video.playsInline = true;
+      document.body.appendChild(video);
+
+      let settled = false;
+      function finish(){
+        if (settled) return;
+        settled = true;
+        try { video.pause(); } catch(e){}
+        try { document.body.removeChild(video); } catch(e){}
+        resolve();
+      }
+      cancelHolder.cancelFn = finish;
+
+      function frame(){
+        if (settled) return;
+        drawContain(ctx2d, video, video.videoWidth, video.videoHeight, OUT_W, OUT_H);
+        const elapsed = baseElapsed + video.currentTime;
+        if (total > 0){
+          progressBar.style.width = Math.min(100, elapsed/total*100) + '%';
+          timeLabel.textContent = `${fmtTime(elapsed)} / ${fmtTime(total)}`;
+        }
+        if (!video.ended) requestAnimationFrame(frame);
+      }
+
+      video.addEventListener('loadedmetadata', () => {
+        video.play().then(() => {
+          try {
+            const srcNode = audioCtx.createMediaElementSource(video);
+            srcNode.connect(audioCtx.destination);
+            if (destNode) srcNode.connect(destNode);
+          } catch (err){ console.warn('音声の接続に失敗しました', err); }
+          requestAnimationFrame(frame);
+        }).catch((err) => {
+          console.error(err);
+          finish();
+        });
+      });
+      video.addEventListener('ended', finish);
+      video.addEventListener('error', finish);
+    });
+  }
+
+  // ============================================================
+  // VIEW 1: slide narration studio
+  // ============================================================
+  const state = { slides: [], micStream: null, nextId: 1 };
+
+  const els = {
+    openPdfBtn: document.getElementById('openPdfBtn'),
+    emptyOpenBtn: document.getElementById('emptyOpenBtn'),
+    pdfInput: document.getElementById('pdfInput'),
+    previewBtn: document.getElementById('previewBtn'),
+    exportBtn: document.getElementById('exportBtn'),
+    emptyState: document.getElementById('emptyState'),
+    slideList: document.getElementById('slideList'),
+    headerMeta: document.getElementById('headerMeta'),
+  };
+
+  els.openPdfBtn.addEventListener('click', () => els.pdfInput.click());
+  els.emptyOpenBtn.addEventListener('click', () => els.pdfInput.click());
+  els.pdfInput.addEventListener('change', onPdfSelected);
+  els.previewBtn.addEventListener('click', () => runSlidesPlayback({record:false}));
+  els.exportBtn.addEventListener('click', () => runSlidesPlayback({record:true}));
+
+  function totalDuration(){ return state.slides.reduce((a,s)=>a+s.duration, 0); }
+
+  function updateHeaderMeta(){
+    els.headerMeta.textContent = state.slides.length
+      ? `全${state.slides.length}枚・合計${fmtTime(totalDuration())}` : '';
+  }
+
+  function updateGlobalButtons(){
+    const ready = state.slides.length > 0;
+    els.previewBtn.disabled = !ready;
+    els.exportBtn.disabled = !ready;
+  }
+
+  async function onPdfSelected(e){
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+
+    els.openPdfBtn.disabled = true;
+    els.emptyOpenBtn.disabled = true;
+    const originalBtnHtml = els.openPdfBtn.innerHTML;
+    els.openPdfBtn.textContent = '読み込み中…';
+
+    try {
+      const buf = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({data: buf}).promise;
+      const newSlides = [];
+      const TARGET_W = 1600;
+
+      for (let i = 1; i <= pdf.numPages; i++){
+        const page = await pdf.getPage(i);
+        const base = page.getViewport({scale: 1});
+        const scale = TARGET_W / base.width;
+        const viewport = page.getViewport({scale});
+
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(viewport.width);
+        canvas.height = Math.round(viewport.height);
+        const ctx = canvas.getContext('2d');
+        await page.render({canvasContext: ctx, viewport}).promise;
+
+        newSlides.push({
+          id: state.nextId++,
+          canvas,
+          thumbUrl: canvas.toDataURL('image/jpeg', 0.82),
+          duration: 5,
+          audioBlob: null, audioUrl: null, audioBuffer: null, audioDuration: 0,
+          recording: false, recorder: null, autoStopTimer: null,
+        });
+      }
+      state.slides = newSlides;
+      renderSlides();
+    } catch (err){
+      console.error(err);
+      alert('PDFの読み込みに失敗しました。ファイルが破損していないか確認してください。');
+    } finally {
+      els.openPdfBtn.disabled = false;
+      els.emptyOpenBtn.disabled = false;
+      els.openPdfBtn.innerHTML = originalBtnHtml;
+    }
+  }
+
+  async function ensureMic(){
+    if (state.micStream) return state.micStream;
+    state.micStream = await navigator.mediaDevices.getUserMedia({audio: true});
+    return state.micStream;
+  }
+
+  async function startRecording(slide){
+    try { await ensureMic(); }
+    catch (err){ alert('マイクを使用できませんでした。ブラウザのマイク許可設定を確認してください。'); return; }
+
+    const mimeType = pickMime(['audio/webm;codecs=opus','audio/webm','audio/mp4','audio/ogg;codecs=opus']);
+    const chunks = [];
+    let rec;
+    try { rec = mimeType ? new MediaRecorder(state.micStream, {mimeType}) : new MediaRecorder(state.micStream); }
+    catch (err){ alert('このブラウザでは録音を開始できませんでした。'); return; }
+
+    rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+    rec.onstop = async () => {
+      clearTimeout(slide.autoStopTimer);
+      const blob = new Blob(chunks, {type: mimeType || 'audio/webm'});
+      if (slide.audioUrl) URL.revokeObjectURL(slide.audioUrl);
+      slide.audioBlob = blob;
+      slide.audioUrl = URL.createObjectURL(blob);
+      slide.recording = false;
+      slide.recorder = null;
+      try {
+        const arr = await blob.arrayBuffer();
+        const audioBuffer = await getAudioCtx().decodeAudioData(arr);
+        slide.audioBuffer = audioBuffer;
+        slide.audioDuration = audioBuffer.duration;
+        if (audioBuffer.duration > slide.duration) slide.duration = Math.ceil(audioBuffer.duration * 10) / 10;
+      } catch (err){ console.warn('録音データの解析に失敗しました', err); }
+      renderSlides();
+    };
+
+    slide.recorder = rec;
+    slide.recording = true;
+    slide.recordStart = performance.now();
+    slide.levelStop = startLevelMeter(slide);
+    rec.start();
+    slide.autoStopTimer = setTimeout(() => stopRecording(slide), slide.duration * 1000);
+    renderSlides();
+    tickStatus(slide);
+  }
+
+  function tickStatus(slide){
+    if (!slide.recording) return;
+    const el = document.querySelector(`[data-role="statusText"][data-slide="${slide.id}"]`);
+    if (el){
+      const elapsed = (performance.now() - slide.recordStart) / 1000;
+      el.textContent = `録音中… ${fmtTime(elapsed)} / ${fmtTime(slide.duration)}`;
+    }
+    requestAnimationFrame(() => tickStatus(slide));
+  }
+
+  function stopRecording(slide){
+    if (slide.levelStop){ slide.levelStop(); slide.levelStop = null; }
+    if (slide.recorder && slide.recorder.state !== 'inactive') slide.recorder.stop();
+  }
+
+  function deleteRecording(slide){
+    if (slide.audioUrl) URL.revokeObjectURL(slide.audioUrl);
+    slide.audioBlob = null; slide.audioUrl = null; slide.audioBuffer = null; slide.audioDuration = 0;
+    renderSlides();
+  }
+
+  function startLevelMeter(slide){
+    let stopped = false;
+    const ctx = getAudioCtx();
+    const src = ctx.createMediaStreamSource(state.micStream);
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 256;
+    src.connect(analyser);
+    const data = new Uint8Array(analyser.frequencyBinCount);
+
+    function tick(){
+      if (stopped) return;
+      const bars = document.querySelectorAll(`.level-meter[data-slide="${slide.id}"] i`);
+      if (bars.length){
+        analyser.getByteFrequencyData(data);
+        const step = Math.floor(data.length / bars.length);
+        bars.forEach((bar, i) => { bar.style.height = Math.max(10, ((data[i*step]||0)/255)*100) + '%'; });
+      }
+      requestAnimationFrame(tick);
+    }
+    tick();
+    return () => { stopped = true; try { src.disconnect(); analyser.disconnect(); } catch(e){} };
+  }
+
+  function renderSlides(){
+    updateHeaderMeta();
+    updateGlobalButtons();
+    els.emptyState.style.display = state.slides.length ? 'none' : 'flex';
+    els.slideList.innerHTML = '';
+
+    state.slides.forEach((slide, idx) => {
+      const card = document.createElement('div');
+      card.className = 'slide-card';
+      const durMin = slide.audioDuration ? (Math.ceil(slide.audioDuration*10)/10) : 1;
+
+      card.innerHTML = `
+        <div class="slide-thumb">
+          <span class="slide-num">${String(idx+1).padStart(2,'0')}</span>
+          <img src="${slide.thumbUrl}" alt="スライド${idx+1}">
+          <span class="rec-badge ${slide.audioBlob ? '' : 'none'}"><span class="dot"></span>${slide.audioBlob ? fmtTime(slide.audioDuration) : '未録音'}</span>
+        </div>
+        <div class="slide-body">
+          <div class="row">
+            <span class="field-label">表示時間</span>
+            <input type="number" class="dur-input" min="${durMin}" step="0.5" value="${slide.duration}" data-role="duration" ${slide.recording ? 'disabled' : ''}>
+            <span class="field-label">秒</span>
+            ${slide.recording ? `<span class="status-text recording" data-role="statusText" data-slide="${slide.id}">録音中… 0:00 / ${fmtTime(slide.duration)}</span>` :
+              slide.audioBlob ? `<span class="status-text done">録音済み</span>` : `<span class="status-text">まだ録音していません</span>`}
+          </div>
+          <div class="row">
+            ${slide.recording ? `
+              <button class="btn btn-record is-active btn-sm" data-role="stop">
+                <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg> 停止
+              </button>
+              <div class="level-meter" data-slide="${slide.id}">${Array.from({length:20}).map(()=> '<i></i>').join('')}</div>
+            ` : `
+              <button class="btn btn-record btn-sm" data-role="record">
+                <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="7"/></svg> ${slide.audioBlob ? '再録音' : '録音'}
+              </button>
+              ${slide.audioBlob ? `<audio class="player" controls src="${slide.audioUrl}"></audio><button class="btn btn-ghost btn-sm" data-role="delete">削除</button>` : ''}
+            `}
+          </div>
+        </div>
+      `;
+
+      const durInput = card.querySelector('[data-role="duration"]');
+      durInput.addEventListener('change', () => {
+        let v = parseFloat(durInput.value);
+        if (isNaN(v) || v < parseFloat(durInput.min)) v = parseFloat(durInput.min);
+        slide.duration = Math.round(v*10)/10;
+        renderSlides();
+      });
+      const recordBtn = card.querySelector('[data-role="record"]');
+      if (recordBtn) recordBtn.addEventListener('click', () => startRecording(slide));
+      const stopBtn = card.querySelector('[data-role="stop"]');
+      if (stopBtn) stopBtn.addEventListener('click', () => stopRecording(slide));
+      const deleteBtn = card.querySelector('[data-role="delete"]');
+      if (deleteBtn) deleteBtn.addEventListener('click', () => deleteRecording(slide));
+
+      els.slideList.appendChild(card);
+    });
+  }
+
+  async function runSlidesPlayback({record}){
+    if (!state.slides.length) return;
+    const slides = state.slides;
+    const cumulative = [];
+    let acc = 0;
+    slides.forEach(s => { cumulative.push({start: acc, end: acc + s.duration}); acc += s.duration; });
+    const total = acc;
+
+    const first = slides[0].canvas;
+    const OUT_W = 1280;
+    const OUT_H = Math.round(OUT_W * (first.height / first.width));
+
+    const ui = createOverlay(record ? '動画を書き出しています…' : 'プレビュー再生中');
+    ui.canvas.width = OUT_W; ui.canvas.height = OUT_H;
+    ui.cancelBtn.textContent = record ? 'キャンセル' : '閉じる';
+    const ctx2d = ui.canvas.getContext('2d');
+    let cancelled = false;
+
+    function drawSlideOnCanvas(idx){
+      const src = slides[idx].canvas;
+      drawContain(ctx2d, src, src.width, src.height, OUT_W, OUT_H);
+    }
+    drawSlideOnCanvas(0);
+
+    const audioCtx = getAudioCtx();
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+    let destNode = null, mediaRecorder = null, recordedChunks = [];
+    if (record){
+      destNode = audioCtx.createMediaStreamDestination();
+      const canvasStream = ui.canvas.captureStream(30);
+      const mixed = new MediaStream([...canvasStream.getVideoTracks(), ...destNode.stream.getAudioTracks()]);
+      const mimeType = pickMime(['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm']);
+      try { mediaRecorder = mimeType ? new MediaRecorder(mixed, {mimeType, videoBitsPerSecond: 6_000_000}) : new MediaRecorder(mixed); }
+      catch (err){ alert('このブラウザでは動画の書き出しに対応していません。'); ui.overlay.remove(); return; }
+      mediaRecorder.ondataavailable = (e) => { if (e.data && e.data.size) recordedChunks.push(e.data); };
+    }
+
+    const sources = [];
+    const t0 = audioCtx.currentTime + 0.25;
+    slides.forEach((s, i) => {
+      if (s.audioBuffer){
+        const src = audioCtx.createBufferSource();
+        src.buffer = s.audioBuffer;
+        src.connect(audioCtx.destination);
+        if (destNode) src.connect(destNode);
+        sources.push(src);
+        src.start(t0 + cumulative[i].start);
+      }
+    });
+    if (mediaRecorder) mediaRecorder.start();
+
+    ui.cancelBtn.addEventListener('click', () => {
+      cancelled = true;
+      sources.forEach(s => { try{ s.stop(); }catch(e){} });
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+      ui.overlay.remove();
+    });
+
+    function loop(){
+      if (cancelled) return;
+      const elapsed = audioCtx.currentTime - t0;
+      const clamped = Math.max(0, Math.min(elapsed, total));
+      ui.progressBar.style.width = (clamped/total*100) + '%';
+      ui.timeLabel.textContent = `${fmtTime(clamped)} / ${fmtTime(total)}`;
+      if (elapsed >= 0){
+        let idx = cumulative.findIndex(c => elapsed >= c.start && elapsed < c.end);
+        if (idx === -1) idx = elapsed >= total ? slides.length-1 : 0;
+        drawSlideOnCanvas(idx);
+      }
+      if (elapsed >= total){ finish(); return; }
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+
+    function finish(){
+      if (cancelled) return;
+      if (mediaRecorder){
+        setTimeout(() => { if (mediaRecorder.state !== 'inactive') mediaRecorder.stop(); }, 150);
+        mediaRecorder.onstop = () => {
+          const outMime = mediaRecorder.mimeType || 'video/webm';
+          const blob = new Blob(recordedChunks, {type: outMime});
+          const url = URL.createObjectURL(blob);
+          const ext = outMime.includes('mp4') ? 'mp4' : 'webm';
+          finishOverlay(ui, total, blob, url, ext, 'slide-narration');
+        };
+      } else {
+        ui.overlay.remove();
+      }
+    }
+  }
+
+  // ============================================================
+  // VIEW 2: video concatenation
+  // ============================================================
+  const concatState = { clips: [], nextId: 1 };
+
+  const cels = {
+    clipInput: document.getElementById('clipInput'),
+    addClipsBtn: document.getElementById('addClipsBtn'),
+    concatEmptyAddBtn: document.getElementById('concatEmptyAddBtn'),
+    previewBtn: document.getElementById('concatPreviewBtn'),
+    exportBtn: document.getElementById('concatExportBtn'),
+    emptyState: document.getElementById('concatEmptyState'),
+    clipList: document.getElementById('clipList'),
+    meta: document.getElementById('concatMeta'),
+  };
+
+  cels.addClipsBtn.addEventListener('click', () => cels.clipInput.click());
+  cels.concatEmptyAddBtn.addEventListener('click', () => cels.clipInput.click());
+  cels.clipInput.addEventListener('change', onClipsSelected);
+  cels.previewBtn.addEventListener('click', () => runConcatPlayback({record:false}));
+  cels.exportBtn.addEventListener('click', () => runConcatPlayback({record:true}));
+
+  function concatTotalDuration(){ return concatState.clips.reduce((a,c)=>a+c.duration, 0); }
+
+  function updateConcatMeta(){
+    cels.meta.textContent = concatState.clips.length
+      ? `全${concatState.clips.length}本・合計${fmtTime(concatTotalDuration())}` : '';
+  }
+  function updateConcatButtons(){
+    const ready = concatState.clips.length > 0;
+    cels.previewBtn.disabled = !ready;
+    cels.exportBtn.disabled = !ready;
+  }
+
+  async function loadClipMeta(file){
+    const url = URL.createObjectURL(file);
+    const v = document.createElement('video');
+    v.src = url; v.muted = true; v.preload = 'metadata';
+    await new Promise((res, rej) => {
+      v.onloadedmetadata = res;
+      v.onerror = () => rej(new Error('load failed'));
+    });
+    const duration = v.duration, width = v.videoWidth, height = v.videoHeight;
+    let thumbUrl = '';
+    try {
+      await new Promise((res) => {
+        v.onseeked = res;
+        v.currentTime = Math.min(0.15, duration/2) || 0;
+      });
+      const c = document.createElement('canvas');
+      c.width = Math.min(320, width || 320);
+      c.height = Math.round(c.width * ((height||9) / (width||16)));
+      c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+      thumbUrl = c.toDataURL('image/jpeg', 0.8);
+    } catch(e){ /* thumbnail is best-effort */ }
+    return {url, duration, width, height, thumbUrl};
+  }
+
+  async function onClipsSelected(e){
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (!files.length) return;
+
+    cels.addClipsBtn.disabled = true;
+    const original = cels.addClipsBtn.innerHTML;
+    cels.addClipsBtn.textContent = '読み込み中…';
+
+    for (const file of files){
+      try {
+        const meta = await loadClipMeta(file);
+        concatState.clips.push({
+          id: concatState.nextId++,
+          name: file.name,
+          url: meta.url, duration: meta.duration, width: meta.width, height: meta.height, thumbUrl: meta.thumbUrl,
+        });
+      } catch (err){
+        console.error(err);
+        alert(`「${file.name}」を読み込めませんでした。対応していない形式の可能性があります。`);
+      }
+    }
+    cels.addClipsBtn.disabled = false;
+    cels.addClipsBtn.innerHTML = original;
+    renderClips();
+  }
+
+  function moveClip(idx, dir){
+    const target = idx + dir;
+    if (target < 0 || target >= concatState.clips.length) return;
+    const arr = concatState.clips;
+    [arr[idx], arr[target]] = [arr[target], arr[idx]];
+    renderClips();
+  }
+
+  function deleteClip(idx){
+    const [removed] = concatState.clips.splice(idx, 1);
+    if (removed) URL.revokeObjectURL(removed.url);
+    renderClips();
+  }
+
+  function renderClips(){
+    updateConcatMeta();
+    updateConcatButtons();
+    cels.emptyState.style.display = concatState.clips.length ? 'none' : 'flex';
+    cels.clipList.innerHTML = '';
+
+    concatState.clips.forEach((clip, idx) => {
+      const card = document.createElement('div');
+      card.className = 'clip-card';
+      card.innerHTML = `
+        <div class="clip-reorder">
+          <button data-role="up" ${idx===0 ? 'disabled':''} aria-label="上へ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 15l6-6 6 6"/></svg></button>
+          <button data-role="down" ${idx===concatState.clips.length-1 ? 'disabled':''} aria-label="下へ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 9l6 6 6-6"/></svg></button>
+        </div>
+        <div class="clip-thumb">
+          <span class="clip-num">${String(idx+1).padStart(2,'0')}</span>
+          ${clip.thumbUrl ? `<img src="${clip.thumbUrl}" alt="${clip.name}">` : ''}
+          <span class="clip-badge"><span class="dot"></span>${fmtTime(clip.duration)}</span>
+        </div>
+        <div class="clip-body">
+          <div class="clip-name" title="${clip.name}">${clip.name}</div>
+          <div class="row">
+            <video class="player" controls src="${clip.url}" style="max-width:260px;height:120px;border-radius:6px;background:#000;"></video>
+            <button class="btn btn-ghost btn-sm" data-role="delete">削除</button>
+          </div>
+        </div>
+      `;
+      card.querySelector('[data-role="up"]').addEventListener('click', () => moveClip(idx, -1));
+      card.querySelector('[data-role="down"]').addEventListener('click', () => moveClip(idx, 1));
+      card.querySelector('[data-role="delete"]').addEventListener('click', () => deleteClip(idx));
+      cels.clipList.appendChild(card);
+    });
+  }
+
+  async function runConcatPlayback({record}){
+    const clips = concatState.clips;
+    if (!clips.length) return;
+
+    const maxW = Math.max(...clips.map(c => c.width || 1280));
+    const maxH = Math.max(...clips.map(c => c.height || 720));
+    const scale = Math.min(1, 1920/maxW, 1080/maxH);
+    const OUT_W = Math.round(maxW*scale/2)*2;
+    const OUT_H = Math.round(maxH*scale/2)*2;
+    const total = concatTotalDuration();
+
+    const ui = createOverlay(record ? '動画をつなげて書き出しています…' : 'プレビュー再生中');
+    ui.canvas.width = OUT_W; ui.canvas.height = OUT_H;
+    ui.cancelBtn.textContent = record ? 'キャンセル' : '閉じる';
+    const ctx2d = ui.canvas.getContext('2d');
+
+    const audioCtx = getAudioCtx();
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+    let destNode = null, mediaRecorder = null, recordedChunks = [];
+    if (record){
+      destNode = audioCtx.createMediaStreamDestination();
+      const canvasStream = ui.canvas.captureStream(30);
+      const mixed = new MediaStream([...canvasStream.getVideoTracks(), ...destNode.stream.getAudioTracks()]);
+      const mimeType = pickMime(['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm']);
+      try { mediaRecorder = mimeType ? new MediaRecorder(mixed, {mimeType, videoBitsPerSecond: 8_000_000}) : new MediaRecorder(mixed); }
+      catch (err){ alert('このブラウザでは動画の書き出しに対応していません。'); ui.overlay.remove(); return; }
+      mediaRecorder.ondataavailable = (e) => { if (e.data && e.data.size) recordedChunks.push(e.data); };
+      mediaRecorder.start();
+    }
+
+    let cancelled = false;
+    const cancelHolder = { cancelFn: null };
+    ui.cancelBtn.addEventListener('click', () => {
+      cancelled = true;
+      if (cancelHolder.cancelFn) cancelHolder.cancelFn();
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+      ui.overlay.remove();
+    });
+
+    let baseElapsed = 0;
+    for (const clip of clips){
+      if (cancelled) break;
+      await playVideoSegment({
+        url: clip.url, ctx2d, OUT_W, OUT_H, audioCtx, destNode,
+        baseElapsed, total, progressBar: ui.progressBar, timeLabel: ui.timeLabel, cancelHolder,
+      });
+      baseElapsed += clip.duration;
+    }
+
+    if (cancelled) return;
+
+    if (mediaRecorder){
+      setTimeout(() => {
+        if (mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+      }, 150);
+      mediaRecorder.onstop = () => {
+        const outMime = mediaRecorder.mimeType || 'video/webm';
+        const blob = new Blob(recordedChunks, {type: outMime});
+        const url = URL.createObjectURL(blob);
+        const ext = outMime.includes('mp4') ? 'mp4' : 'webm';
+        finishOverlay(ui, total, blob, url, ext, 'combined-video');
+      };
+    } else {
+      ui.overlay.remove();
+    }
+  }
+
+  function finishOverlay(ui, total, blob, url, ext, filenameBase){
+    ui.overlay.innerHTML = `
+      <div class="overlay-title">書き出しが完了しました</div>
+      <div class="overlay-time" style="font-size:13px;">${fmtTime(total)} ・ ${(blob.size/1024/1024).toFixed(1)}MB</div>
+      <div class="overlay-controls">
+        <a class="btn btn-primary" href="${url}" download="${filenameBase}.${ext}">動画をダウンロード</a>
+        <button class="btn" data-role="close">閉じる</button>
+      </div>
+    `;
+    ui.overlay.querySelector('[data-role="close"]').addEventListener('click', () => {
+      ui.overlay.remove();
+      URL.revokeObjectURL(url);
+    });
+  }
+
+  // ============================================================
+  // tabs
+  // ============================================================
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
+      const target = btn.dataset.tab;
+      document.getElementById('view-slides').classList.toggle('active', target === 'slides');
+      document.getElementById('view-concat').classList.toggle('active', target === 'concat');
+    });
+  });
+
+  renderSlides();
+  renderClips();
+})();
+</script>
+</body>
+</html>
