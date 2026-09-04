@@ -56,6 +56,16 @@
   .tab-btn.active{background:var(--accent);color:var(--accent-ink);font-weight:600;}
   .tab-btn:hover:not(.active){color:var(--text);}
 
+  .mode-toggle{display:flex;gap:3px;background:var(--bg-raised);border:1px solid var(--border);border-radius:999px;padding:2px;}
+  .mode-btn{
+    border:none;background:transparent;color:var(--text-muted);padding:5px 12px;border-radius:999px;
+    font-size:12px;font-weight:500;cursor:pointer;transition:background .15s ease,color .15s ease;white-space:nowrap;
+  }
+  .mode-btn.active{background:var(--accent);color:var(--accent-ink);font-weight:600;}
+  .mode-btn:hover:not(.active):not(:disabled){color:var(--text);}
+  .mode-btn:disabled{opacity:0.4;cursor:not-allowed;}
+  .dur-input:disabled{opacity:0.6;}
+
   .banner{max-width:880px;margin:0 auto;padding:10px 24px 0;}
   .banner-inner{
     background:var(--bg-panel);border:1px solid var(--border);border-left:3px solid var(--accent);
@@ -465,6 +475,7 @@
           canvas,
           thumbUrl: canvas.toDataURL('image/jpeg', 0.82),
           duration: 5,
+          durationMode: 'manual', // 'manual' = 指定した長さ / 'recorded' = 録音した長さ
           audioBlob: null, audioUrl: null, audioBuffer: null, audioDuration: 0,
           recording: false, recorder: null, autoStopTimer: null,
         });
@@ -511,7 +522,11 @@
         const audioBuffer = await getAudioCtx().decodeAudioData(arr);
         slide.audioBuffer = audioBuffer;
         slide.audioDuration = audioBuffer.duration;
-        if (audioBuffer.duration > slide.duration) slide.duration = Math.ceil(audioBuffer.duration * 10) / 10;
+        if (slide.durationMode === 'recorded'){
+          // このモードではスライドの表示時間 = 録音した長さ、そのまま
+          slide.duration = Math.round(audioBuffer.duration * 10) / 10;
+        }
+        // 'manual' モードでは、ユーザーが指定した秒数をそのまま尊重する(自動延長しない)
       } catch (err){ console.warn('録音データの解析に失敗しました', err); }
       renderSlides();
     };
@@ -521,7 +536,10 @@
     slide.recordStart = performance.now();
     slide.levelStop = startLevelMeter(slide);
     rec.start();
-    slide.autoStopTimer = setTimeout(() => stopRecording(slide), slide.duration * 1000);
+    // 「指定した長さ」モードのみ、指定秒数で自動停止する。「録音した長さ」モードは手動で停止するまで録り続ける。
+    if (slide.durationMode === 'manual'){
+      slide.autoStopTimer = setTimeout(() => stopRecording(slide), slide.duration * 1000);
+    }
     renderSlides();
     tickStatus(slide);
   }
@@ -531,9 +549,20 @@
     const el = document.querySelector(`[data-role="statusText"][data-slide="${slide.id}"]`);
     if (el){
       const elapsed = (performance.now() - slide.recordStart) / 1000;
-      el.textContent = `録音中… ${fmtTime(elapsed)} / ${fmtTime(slide.duration)}`;
+      el.textContent = slide.durationMode === 'manual'
+        ? `録音中… ${fmtTime(elapsed)} / ${fmtTime(slide.duration)}`
+        : `録音中… ${fmtTime(elapsed)}`;
     }
     requestAnimationFrame(() => tickStatus(slide));
+  }
+
+  function setDurationMode(slide, mode){
+    if (slide.recording || slide.durationMode === mode) return;
+    slide.durationMode = mode;
+    if (mode === 'recorded' && slide.audioBuffer){
+      slide.duration = Math.round(slide.audioBuffer.duration * 10) / 10;
+    }
+    renderSlides();
   }
 
   function stopRecording(slide){
@@ -544,6 +573,7 @@
   function deleteRecording(slide){
     if (slide.audioUrl) URL.revokeObjectURL(slide.audioUrl);
     slide.audioBlob = null; slide.audioUrl = null; slide.audioBuffer = null; slide.audioDuration = 0;
+    if (slide.durationMode === 'recorded') slide.duration = 3; // 録音がなくなったので仮の長さに戻す
     renderSlides();
   }
 
@@ -579,7 +609,25 @@
     state.slides.forEach((slide, idx) => {
       const card = document.createElement('div');
       card.className = 'slide-card';
-      const durMin = slide.audioDuration ? (Math.ceil(slide.audioDuration*10)/10) : 1;
+      const isManual = slide.durationMode === 'manual';
+      const durLocked = !isManual || slide.recording;
+
+      let durationRowHtml;
+      if (isManual){
+        durationRowHtml = `
+          <input type="number" class="dur-input" min="0.5" step="0.5" value="${slide.duration}" data-role="duration" ${durLocked ? 'disabled' : ''}>
+          <span class="field-label">秒</span>
+          ${slide.recording ? `<span class="status-text recording" data-role="statusText" data-slide="${slide.id}">録音中… 0:00 / ${fmtTime(slide.duration)}</span>` :
+            slide.audioBlob ? `<span class="status-text done">録音済み</span>` : `<span class="status-text">まだ録音していません</span>`}
+        `;
+      } else {
+        durationRowHtml = `
+          <input type="number" class="dur-input" value="${slide.duration}" disabled>
+          <span class="field-label">秒(録音した長さに自動で決まります)</span>
+          ${slide.recording ? `<span class="status-text recording" data-role="statusText" data-slide="${slide.id}">録音中… 0:00</span>` :
+            slide.audioBlob ? `<span class="status-text done">録音済み</span>` : `<span class="status-text">まだ録音していません</span>`}
+        `;
+      }
 
       card.innerHTML = `
         <div class="slide-thumb">
@@ -590,11 +638,12 @@
         <div class="slide-body">
           <div class="row">
             <span class="field-label">表示時間</span>
-            <input type="number" class="dur-input" min="${durMin}" step="0.5" value="${slide.duration}" data-role="duration" ${slide.recording ? 'disabled' : ''}>
-            <span class="field-label">秒</span>
-            ${slide.recording ? `<span class="status-text recording" data-role="statusText" data-slide="${slide.id}">録音中… 0:00 / ${fmtTime(slide.duration)}</span>` :
-              slide.audioBlob ? `<span class="status-text done">録音済み</span>` : `<span class="status-text">まだ録音していません</span>`}
+            <div class="mode-toggle">
+              <button class="mode-btn ${isManual ? 'active' : ''}" data-role="mode-manual" ${slide.recording ? 'disabled' : ''}>指定した長さ</button>
+              <button class="mode-btn ${!isManual ? 'active' : ''}" data-role="mode-recorded" ${slide.recording ? 'disabled' : ''}>録音した長さ</button>
+            </div>
           </div>
+          <div class="row">${durationRowHtml}</div>
           <div class="row">
             ${slide.recording ? `
               <button class="btn btn-record is-active btn-sm" data-role="stop">
@@ -612,12 +661,16 @@
       `;
 
       const durInput = card.querySelector('[data-role="duration"]');
-      durInput.addEventListener('change', () => {
-        let v = parseFloat(durInput.value);
-        if (isNaN(v) || v < parseFloat(durInput.min)) v = parseFloat(durInput.min);
-        slide.duration = Math.round(v*10)/10;
-        renderSlides();
-      });
+      if (isManual){
+        durInput.addEventListener('change', () => {
+          let v = parseFloat(durInput.value);
+          if (isNaN(v) || v < 0.5) v = 0.5;
+          slide.duration = Math.round(v*10)/10;
+          renderSlides();
+        });
+      }
+      card.querySelector('[data-role="mode-manual"]').addEventListener('click', () => setDurationMode(slide, 'manual'));
+      card.querySelector('[data-role="mode-recorded"]').addEventListener('click', () => setDurationMode(slide, 'recorded'));
       const recordBtn = card.querySelector('[data-role="record"]');
       if (recordBtn) recordBtn.addEventListener('click', () => startRecording(slide));
       const stopBtn = card.querySelector('[data-role="stop"]');
@@ -676,7 +729,10 @@
         src.connect(audioCtx.destination);
         if (destNode) src.connect(destNode);
         sources.push(src);
-        src.start(t0 + cumulative[i].start);
+        // 「指定した長さ」モードで録音が表示時間より長い場合、次のスライドと音声が重ならないよう
+        // スライドの表示時間でナレーションを打ち切る
+        const playDur = Math.min(s.audioBuffer.duration, s.duration);
+        src.start(t0 + cumulative[i].start, 0, playDur);
       }
     });
     if (mediaRecorder) mediaRecorder.start();
