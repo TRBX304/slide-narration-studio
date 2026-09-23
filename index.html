@@ -7,17 +7,17 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.min.js"></script>
 <style>
   :root{
-    --bg-app:#090d16;
-    --bg-panel:#101b2d;
-    --bg-raised:#15263d;
-    --bg-raised-2:#1b3355;
-    --border:#2b4468;
-    --text:#edf4ff;
-    --text-muted:#9bb3d1;
-    --text-faint:#6884aa;
-    --accent:#4d9dff;
-    --accent-strong:#7bb6ff;
-    --accent-ink:#071a2e;
+    --bg-app:#05070b;
+    --bg-panel:#0d1017;
+    --bg-raised:#151a24;
+    --bg-raised-2:#1c2330;
+    --border:#232a3a;
+    --text:#eef1f6;
+    --text-muted:#8894a8;
+    --text-faint:#525c70;
+    --accent:#2f7dfa;
+    --accent-strong:#5b9bff;
+    --accent-ink:#f2f7ff;
     --record:#e5484d;
     --record-strong:#ff6a6f;
     --success:#4fb477;
@@ -43,7 +43,7 @@
     position:sticky;top:0;z-index:20;
     display:flex;align-items:center;gap:20px;flex-wrap:wrap;
     padding:14px 24px;
-    background:rgba(16,27,45,0.92);
+    background:rgba(27,30,39,0.92);
     backdrop-filter:blur(6px);
     border-bottom:1px solid var(--border);
   }
@@ -999,10 +999,14 @@
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
-      document.getElementById('view-slides').classList.toggle('active', btn.dataset.tab === 'slides');
-      document.getElementById('view-concat').classList.toggle('active', btn.dataset.tab === 'concat');
+      const target = btn.dataset.tab;
+      document.getElementById('view-slides').classList.toggle('active', target === 'slides');
+      document.getElementById('view-concat').classList.toggle('active', target === 'concat');
     });
   });
+
+  renderSlides();
+  renderClips();
 })();
 </script>
 </body>
